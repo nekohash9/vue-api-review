@@ -1,20 +1,30 @@
-// src/api/index.js  — Vercel proxy
+// src/api/index.js (debug-friendly proxy variant)
 import axios from 'axios'
 
 const DEFAULT_TOKEN = import.meta.env.VITE_API_KEY || null
+const api = axios.create({ baseURL: '' }) // proxy повёрнут на тот же хост (/api/proxy)
 
-// baseURL пустой — вызовы идут к тому же хосту (Vercel), где живёт функция /api/proxy
-const api = axios.create({ baseURL: '' })
-
-// attach token (either from localStorage or env default)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('api_token') || DEFAULT_TOKEN
   if (!config.params) config.params = {}
   if (token) config.params.key = token
+  // debug
+  console.log('[API] request to', config.url, 'params=', config.params)
   return config
 })
 
-// Универсальный fetchList — делает запрос к /api/proxy?resource={resource}&...
+// helpful response interceptor for logging
+api.interceptors.response.use(
+  (resp) => {
+    console.log('[API] response', resp.status, resp.config?.url)
+    return resp
+  },
+  (err) => {
+    console.error('[API] response error', err?.message, err?.response?.status, err?.response?.data)
+    return Promise.reject(err)
+  },
+)
+
 export async function fetchList(
   resource,
   { dateFrom, dateTo, page = 1, limit = 100, extra = {} } = {},
@@ -23,13 +33,40 @@ export async function fetchList(
   if (dateFrom) params.dateFrom = dateFrom
   if (dateTo) params.dateTo = dateTo
 
-  // делаем запрос к Vercel function /api/proxy
+  // call proxy
   const resp = await api.get('/api/proxy', { params: { resource, ...params } })
 
-  // ожидаем, что функция уже вернёт JSON (или текст), нормализуем ответ как раньше
-  const payload = resp.data || resp
-  const items = payload.data || payload.items || []
-  const meta = payload.meta || payload.pagination || {}
+  // Debug: full response log
+  console.log('[API] raw resp object:', {
+    status: resp.status,
+    headers: resp.headers,
+    dataType: typeof resp.data,
+    dataSample: Array.isArray(resp.data) ? resp.data.slice(0, 2) : resp.data,
+  })
+
+  // If proxy returned plain text (string), try to parse JSON
+  let payload = resp.data
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch (e) {
+      console.warn('[API] resp data is string and not JSON, keeping raw string')
+      // leave payload as string
+    }
+  }
+
+  // Expose last raw payload for interactive debugging in console
+  try {
+    // eslint-disable-next-line no-undef
+    window.__LAST_RAW__ = payload
+  } catch (e) {
+    /* ignore (server env may not have window) */
+  }
+
+  // Normalize common shapes
+  const items =
+    (payload && (payload.data || payload.items)) || (Array.isArray(payload) ? payload : [])
+  const meta = (payload && (payload.meta || payload.pagination)) || {}
   const normalizedMeta = {
     current_page: meta.current_page || meta.page || params.page || 1,
     per_page: meta.per_page || meta.perPage || meta.limit || params.limit,
