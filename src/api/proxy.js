@@ -1,5 +1,5 @@
 /* eslint-env node */
-import fetch from 'node-fetch'
+import fetch from 'node-fetch' // или используй глобальный fetch, если среда поддерживает
 
 export default async function handler(req, res) {
   try {
@@ -11,12 +11,17 @@ export default async function handler(req, res) {
 
     const url = `http://109.73.206.144:6969/api/${resource}?${params.toString()}`
 
-    const r = await fetch(url)
-    const txt = await r.text()
+    const r = await fetch(url, { method: 'GET' })
 
-    res.status(r.status)
-    res.setHeader('Content-Type', r.headers.get('content-type') || 'application/json')
-    res.send(txt)
+    // Попытка спарсить JSON. Если не получится — вернуть текст.
+    const text = await r.text()
+    try {
+      const json = JSON.parse(text)
+      res.status(r.status).setHeader('Content-Type', 'application/json').send(JSON.stringify(json))
+    } catch (err) {
+      // если не JSON, отдадим текст как есть (и укажем тип text/plain)
+      res.status(r.status).setHeader('Content-Type', 'text/plain; charset=utf-8').send(text)
+    }
   } catch (err) {
     console.error('proxy error', err)
     res.status(500).json({ error: 'proxy internal error' })
