@@ -25,7 +25,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { fetchList } from '../api'
+import { fetchList } from '../../api'
 import { todayYmd, daysAgoYmd } from '../utils/date'
 import LineChart from '../components/LineChart.vue'
 import DataTable from '../components/DataTable.vue'
