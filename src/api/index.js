@@ -46,18 +46,23 @@ export async function fetchList(
 
   // If proxy returned plain text (string), try to parse JSON
   let payload = resp.data
+
   if (typeof payload === 'string') {
+    // попробуем вытащить JSON из строки
     try {
       payload = JSON.parse(payload)
-    } catch (e) {
-      console.warn('[API] resp data is string and not JSON, keeping raw string')
-      // leave payload as string
+      console.log('[API] parsed payload from string to JSON')
+    } catch (err) {
+      // если не JSON — оставляем строку и логируем
+      console.warn(
+        '[API] payload is string and not valid JSON; payload:',
+        payload.slice ? payload.slice(0, 500) : String(payload),
+      )
     }
   }
 
   // Expose last raw payload for interactive debugging in console
   try {
-    // eslint-disable-next-line no-undef
     window.__LAST_RAW__ = payload
   } catch (e) {
     /* ignore (server env may not have window) */
